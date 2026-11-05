@@ -61,6 +61,40 @@ Text responses can only go so far. Sometimes users need to interact with data, n
 
 PRs welcome! See [Local](#local) above for build instructions.
 
+### Self-hosting with Docker
+
+```bash
+docker build -t excalidraw-mcp .
+docker run -p 3001:3001 \
+  -e EXCALIDRAW_STORE_URL=http://storage:8080/api/v2/scenes/ \
+  -e EXCALIDRAW_APP_URL=https://excalidraw.example.com \
+  excalidraw-mcp
+```
+
+| Variable | Default | Purpose |
+|----------|---------|---------|
+| `EXCALIDRAW_STORE_URL` | `https://json.excalidraw.com/api/v2/post/` | Scene store `POST` endpoint, as reached by the server |
+| `EXCALIDRAW_APP_URL` | `https://excalidraw.com` | Public origin of the Excalidraw app, used in share links |
+| `PORT` | `3001` | HTTP port of the MCP server (`/mcp`) |
+
+The widget still loads the Excalidraw editor from `esm.sh`.
+
+### Excalidraw front image
+
+`excalidraw-front/Dockerfile` builds the upstream app and relays `/api/v2/` to your scene store, chosen when the container starts:
+
+```bash
+docker run -p 8080:8080 -e EXCALIDRAW_BACKEND_URL=http://storage:8080 excalidraw-front
+```
+
+| Variable | Default | Purpose |
+|----------|---------|---------|
+| `EXCALIDRAW_BACKEND_URL` | `http://storage:8080` | Scene store, without path. It must serve `/api/v2/` |
+
+The image runs as non-root on port 8080. With a read-only root filesystem, mount a volume on `/tmp`.
+
+The `Excalidraw front` workflow checks for a new upstream release every day and pushes `ghcr.io/<owner>/excalidraw-front:<tag>`. Scheduled workflows are off by default on forks: enable them in the Actions tab.
+
 ### Deploy your own instance
 
 You can deploy your own copy to Vercel in a few clicks:

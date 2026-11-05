@@ -1,10 +1,10 @@
 /* Load Excalidraw component CSS from CDN (avoids inlining ~200KB) */
-@import url("https://esm.sh/@excalidraw/excalidraw@0.18.0/dist/prod/index.css");
+@import url("https://esm.sh/@excalidraw/excalidraw@0.18.1/dist/prod/index.css");
 
 /* Load Excalidraw's hand-drawn font from CDN (Excalifont = v0.18 default) */
 @font-face {
   font-family: "Excalifont";
-  src: url("https://esm.sh/@excalidraw/excalidraw@0.18.0/dist/prod/fonts/Excalifont/Excalifont-Regular-a88b72a24fb54c9f94e3b5fdaa7481c9.woff2") format("woff2");
+  src: url("https://esm.sh/@excalidraw/excalidraw@0.18.1/dist/prod/fonts/Excalifont/Excalifont-Regular-a88b72a24fb54c9f94e3b5fdaa7481c9.woff2") format("woff2");
   font-display: swap;
 }
 
@@ -13,19 +13,19 @@
    recalculation pass that corrupts text dimensions on first open. */
 @font-face {
   font-family: "Assistant";
-  src: url("https://esm.sh/@excalidraw/excalidraw@0.18.0/dist/prod/fonts/Assistant/Assistant-Regular.woff2") format("woff2");
+  src: url("https://esm.sh/@excalidraw/excalidraw@0.18.1/dist/prod/fonts/Assistant/Assistant-Regular.woff2") format("woff2");
   font-weight: 400;
   font-display: swap;
 }
 @font-face {
   font-family: "Assistant";
-  src: url("https://esm.sh/@excalidraw/excalidraw@0.18.0/dist/prod/fonts/Assistant/Assistant-Medium.woff2") format("woff2");
+  src: url("https://esm.sh/@excalidraw/excalidraw@0.18.1/dist/prod/fonts/Assistant/Assistant-Medium.woff2") format("woff2");
   font-weight: 500;
   font-display: swap;
 }
 @font-face {
   font-family: "Assistant";
-  src: url("https://esm.sh/@excalidraw/excalidraw@0.18.0/dist/prod/fonts/Assistant/Assistant-Bold.woff2") format("woff2");
+  src: url("https://esm.sh/@excalidraw/excalidraw@0.18.1/dist/prod/fonts/Assistant/Assistant-Bold.woff2") format("woff2");
   font-weight: 700;
   font-display: swap;
 }

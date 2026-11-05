@@ -129,7 +129,7 @@ async function shareToExcalidraw(data: {elements: any[], appState: any, files: a
     // Serialize to Excalidraw JSON
     const json = serializeAsJSON(data.elements, data.appState, data.files, "database");
 
-    // Proxy through server tool (avoids CORS on json.excalidraw.com)
+    // Proxy through server tool (avoids CORS on the scene store)
     const result = await app.callServerTool({
       name: "export_to_excalidraw",
       arguments: { json },
@@ -177,7 +177,7 @@ function ShareButton({ onConfirm, compact }: { onConfirm: () => Promise<void>; c
           <div className="Island export-modal" onClick={(e) => e.stopPropagation()}>
             <h3 className="export-modal-title">Export to Excalidraw</h3>
             <p className="export-modal-text">
-              This will upload your diagram to excalidraw.com and open it in a new tab.
+              This will upload your encrypted diagram to Excalidraw and open it in a new tab.
             </p>
             <div className="export-modal-actions">
               <button className="standalone" onClick={() => setState("idle")}>

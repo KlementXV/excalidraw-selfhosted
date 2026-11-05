@@ -1,0 +1,6 @@
+.git
+.vercel
+.vscode
+dist
+node_modules
+*.mcpb
