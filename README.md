@@ -1,131 +1,154 @@
-# Excalidraw MCP App Server
+# Excalidraw Self-Hosted
 
-MCP server that streams hand-drawn Excalidraw diagrams with smooth viewport camera control and interactive fullscreen editing.
+Run [Excalidraw](https://github.com/excalidraw/excalidraw) and its [MCP server](https://github.com/excalidraw/excalidraw-mcp) on your own infrastructure, so shared diagrams are stored with you instead of on excalidraw.com.
+
+This repository is a fork of `excalidraw/excalidraw-mcp`. It adds:
+
+- configurable store and app URLs on the MCP server, plus a Dockerfile
+- a front image that relays its API calls to a backend chosen at startup
+- a workflow that rebuilds the front image for each Excalidraw release
+
+The scene store is the unmodified [kitsteam/excalidraw-storage-backend](https://github.com/kitsteam/excalidraw-storage-backend) image.
 
 ![Demo](docs/demo.gif)
 
-## Install
+## Architecture
 
-Works with any client that supports [MCP Apps](https://modelcontextprotocol.io/docs/extensions/apps) — Claude, ChatGPT, VS Code, Goose, and others. If something doesn't work, please [open an issue](https://github.com/antonpk1/excalidraw-mcp-app/issues).
+```mermaid
+flowchart LR
+    client["MCP client"] -->|"/mcp"| mcp["MCP server"]
+    mcp -->|"POST scene"| store["Scene store"]
+    browser["Browser"] -->|"app and /api/v2/"| front["Excalidraw front (nginx)"]
+    front -->|"/api/v2/"| store
+    store --> db[("PostgreSQL")]
+```
 
-### Remote (recommended)
+| Component | Image | Port |
+|-----------|-------|------|
+| Excalidraw front | `ghcr.io/klementxv/excalidraw-front` | 8080 |
+| MCP server | Built from this repository | 3001 |
+| Scene store | `ghcr.io/kitsteam/excalidraw-storage-backend` | 8080 |
+| Database | PostgreSQL | 5432 |
 
-### `https://mcp.excalidraw.com`
+Scenes are encrypted before upload. The key stays in the `#json=<id>,<key>` part of the share link, so neither the store nor the relay receives it.
 
-For apps that don't yet have an official integration, you can add a custom MCP / connector (naming can vary between apps).
+## Quick start
 
-### Local
+Save this as `docker-compose.yml` at the root of the repository:
 
-**Option A: Download Extension**
+```yaml
+services:
+  front:
+    image: ghcr.io/klementxv/excalidraw-front:v0.18.1
+    ports:
+      - "8080:8080"
+    environment:
+      EXCALIDRAW_BACKEND_URL: http://storage:8080
 
-1. Download `excalidraw-mcp-app.mcpb` from [Releases](https://github.com/antonpk1/excalidraw-mcp-app/releases)
-2. Double-click to install in Claude Desktop
+  mcp:
+    build: .
+    ports:
+      - "3001:3001"
+    environment:
+      EXCALIDRAW_STORE_URL: http://storage:8080/api/v2/scenes/
+      EXCALIDRAW_APP_URL: http://localhost:8080
 
-**Option B: Build from Source**
+  storage:
+    image: ghcr.io/kitsteam/excalidraw-storage-backend:v0.2.5
+    environment:
+      STORAGE_URI: postgres://postgres:change-me@postgres:5432/excalidraw
+      STORAGE_TTL: "31536000000" # One year, in milliseconds
+
+  postgres:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_PASSWORD: change-me
+      POSTGRES_DB: excalidraw
+    volumes:
+      - postgres:/var/lib/postgresql/data
+
+volumes:
+  postgres:
+```
+
+Then start it:
 
 ```bash
-git clone https://github.com/excalidraw/excalidraw-mcp.git
-cd excalidraw-mcp-app
-pnpm install && pnpm run build
+docker compose up -d
 ```
 
-Add to `~/Library/Application Support/Claude/claude_desktop_config.json`:
+- Excalidraw: <http://localhost:8080>
+- MCP endpoint: <http://localhost:3001/mcp>
 
-```json
-{
-  "mcpServers": {
-    "excalidraw": {
-      "command": "node",
-      "args": ["/path/to/excalidraw-mcp-app/dist/index.js", "--stdio"]
-    }
-  }
-}
-```
+## Configuration
 
-Restart Claude Desktop.
+### Excalidraw front
 
-## Usage
+| Variable | Default | Purpose |
+|----------|---------|---------|
+| `EXCALIDRAW_BACKEND_URL` | `http://storage:8080` | Scene store, without a path. It must serve `/api/v2/` |
 
-Example prompts:
-- "Draw a cute cat using excalidraw"
-- "Draw an architecture diagram showing a user connecting to an API server which talks to a database"
-
-## What are MCP Apps and how can I build one?
-
-Text responses can only go so far. Sometimes users need to interact with data, not just read about it. [MCP Apps](https://github.com/modelcontextprotocol/ext-apps/) is an official Model Context Protocol extension that lets servers return interactive HTML interfaces (data visualizations, forms, dashboards) that render directly in the chat.
-
-- **Getting started for humans**: [documentation](https://modelcontextprotocol.io/docs/extensions/apps)
-- **Getting started for AIs**: [skill](https://github.com/modelcontextprotocol/ext-apps/blob/main/plugins/mcp-apps/skills/create-mcp-app/SKILL.md)
-
-## Contributing
-
-PRs welcome! See [Local](#local) above for build instructions.
-
-### Self-hosting with Docker
-
-```bash
-docker build -t excalidraw-mcp .
-docker run -p 3001:3001 \
-  -e EXCALIDRAW_STORE_URL=http://storage:8080/api/v2/scenes/ \
-  -e EXCALIDRAW_APP_URL=https://excalidraw.example.com \
-  excalidraw-mcp
-```
+### MCP server
 
 | Variable | Default | Purpose |
 |----------|---------|---------|
 | `EXCALIDRAW_STORE_URL` | `https://json.excalidraw.com/api/v2/post/` | Scene store `POST` endpoint, as reached by the server |
-| `EXCALIDRAW_APP_URL` | `https://excalidraw.com` | Public origin of the Excalidraw app, used in share links |
-| `PORT` | `3001` | HTTP port of the MCP server (`/mcp`) |
+| `EXCALIDRAW_APP_URL` | `https://excalidraw.com` | Public URL of the front, used in share links |
+| `PORT` | `3001` | HTTP port |
 
-The widget still loads the Excalidraw editor from `esm.sh`.
-
-### Excalidraw front image
-
-`excalidraw-front/Dockerfile` builds the upstream app and relays `/api/v2/` to your scene store, chosen when the container starts:
-
-```bash
-docker run -p 8080:8080 -e EXCALIDRAW_BACKEND_URL=http://storage:8080 excalidraw-front
-```
+### Scene store
 
 | Variable | Default | Purpose |
 |----------|---------|---------|
-| `EXCALIDRAW_BACKEND_URL` | `http://storage:8080` | Scene store, without path. It must serve `/api/v2/` |
+| `STORAGE_URI` | None | PostgreSQL connection string. Required by the image |
+| `STORAGE_TTL` | `86400000` (24 hours) | Lifetime of stored data, in milliseconds. Share links stop working after it |
+| `BODY_LIMIT` | `50mb` | Maximum upload size |
 
-The image runs as non-root on port 8080. With a read-only root filesystem, mount a volume on `/tmp`.
+## Production notes
 
-The `Excalidraw front` workflow checks for a new upstream release every day and pushes `ghcr.io/<owner>/excalidraw-front:<tag>`. Scheduled workflows are off by default on forks: enable them in the Actions tab.
+- **HTTPS:** browsers only allow the decryption of shared scenes over HTTPS or on `localhost`.
+- **Scene store access:** the store has no authentication and the front relays it publicly. Limit the request rate and upload size on your ingress.
+- **MCP access:** the `/mcp` endpoint has no authentication. Keep it on a private network or behind a proxy that authenticates requests.
+- **Read-only containers:** the front and the MCP server both run as non-root, and support a read-only root filesystem if `/tmp` is writable.
+- **Checkpoints:** the MCP server keeps them in `/tmp`, separately on each instance. Run a single replica, and use a volume to keep them across restarts.
+- **Health checks:** use a TCP check for the MCP server, since `GET /mcp` answers 406. The store exposes `/api/v2/health`.
 
-### Deploy your own instance
+## Limitations
 
-You can deploy your own copy to Vercel in a few clicks:
+- The MCP widget still loads the Excalidraw editor and its fonts from `esm.sh`, so the browser needs access to it.
+- The front keeps its upstream defaults for live collaboration, image uploads in share links (Firebase) and libraries. These features still use Excalidraw's services.
+- Excalidraw releases are rare, so the front can lag well behind excalidraw.com.
 
-1. Fork this repo
-2. Go to [vercel.com/new](https://vercel.com/new) and import your fork
-3. No environment variables needed — just deploy
-4. Your server will be at `https://your-project.vercel.app/mcp`
+## Updates
 
-### Release checklist
+The `Excalidraw front` workflow checks the latest Excalidraw release every day. It builds and pushes `excalidraw-front:<tag>` and `:latest` only if that tag is not in the registry yet.
 
-<details>
-<summary>For maintainers</summary>
+To build another version, run the workflow manually with a tag or branch in `ref`. Use `force` to replace an existing image.
+
+GitHub disables scheduled workflows after 60 days without activity on public repositories, so check that this one stays enabled.
+
+To get the MCP server changes from the original project:
 
 ```bash
-# 1. Bump version in manifest.json and package.json
-# 2. Build and pack
-pnpm run build && mcpb pack .
-
-# 3. Create GitHub release
-gh release create v0.3.0 excalidraw-mcp-app.mcpb --title "v0.3.0" --notes "What changed"
-
-# 4. Deploy to Vercel
-vercel --prod
+git remote add upstream https://github.com/excalidraw/excalidraw-mcp
+git fetch upstream
+git merge upstream/main
 ```
 
-</details>
+## Development
+
+```bash
+pnpm install
+pnpm run build
+pnpm run serve   # http://localhost:3001/mcp
+pnpm run dev:ui  # Widget only, with mock data
+```
+
+Architecture details are in [CLAUDE.md](CLAUDE.md).
 
 ## Credits
 
-Built with [Excalidraw](https://github.com/excalidraw/excalidraw) — a virtual whiteboard for sketching hand-drawn like diagrams.
+Built on [Excalidraw](https://github.com/excalidraw/excalidraw), [excalidraw-mcp](https://github.com/excalidraw/excalidraw-mcp) and [excalidraw-storage-backend](https://github.com/kitsteam/excalidraw-storage-backend).
 
 ## License
 
