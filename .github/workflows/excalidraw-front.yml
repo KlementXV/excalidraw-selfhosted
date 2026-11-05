@@ -1,0 +1,89 @@
+# Rebuilds the Excalidraw front whenever upstream publishes a release.
+#
+# GitHub cannot trigger on a release of another repository, so this polls: an image
+# tag that already exists in the registry means that release is already built.
+name: Excalidraw front
+
+on:
+  schedule:
+    - cron: "17 4 * * *"
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: "Upstream tag or branch (empty: latest release)"
+        required: false
+        default: ""
+      force:
+        description: "Rebuild even if the image exists"
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+  packages: write
+
+concurrency:
+  group: excalidraw-front
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    env:
+      IMAGE: ghcr.io/${{ github.repository_owner }}/excalidraw-front
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Resolve the upstream release
+        id: release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          INPUT_REF: ${{ inputs.ref }}
+          FORCE: ${{ inputs.force }}
+        run: |
+          if [ -n "$INPUT_REF" ]; then
+            ref="$INPUT_REF"
+            is_latest=false
+          else
+            ref="$(gh api repos/excalidraw/excalidraw/releases/latest --jq .tag_name)"
+            is_latest=true
+          fi
+          # A branch name such as feature/x is not a valid image tag.
+          tag="$(printf '%s' "$ref" | tr -c 'A-Za-z0-9_.-' '-')"
+
+          if [ "$FORCE" != "true" ] && docker manifest inspect "$IMAGE:$tag" > /dev/null 2>&1; then
+            echo "$IMAGE:$tag already exists, nothing to build."
+            build=false
+          else
+            build=true
+          fi
+
+          {
+            echo "ref=$ref"
+            echo "tag=$tag"
+            echo "is_latest=$is_latest"
+            echo "build=$build"
+          } >> "$GITHUB_OUTPUT"
+
+      - uses: docker/setup-buildx-action@v4
+        if: steps.release.outputs.build == 'true'
+
+      - uses: docker/build-push-action@v7
+        if: steps.release.outputs.build == 'true'
+        with:
+          context: excalidraw-front
+          push: true
+          build-args: |
+            EXCALIDRAW_REF=${{ steps.release.outputs.ref }}
+          tags: |
+            ${{ env.IMAGE }}:${{ steps.release.outputs.tag }}
+            ${{ steps.release.outputs.is_latest == 'true' && format('{0}:latest', env.IMAGE) || '' }}
+          labels: |
+            org.opencontainers.image.source=https://github.com/${{ github.repository }}
+            org.opencontainers.image.version=${{ steps.release.outputs.ref }}

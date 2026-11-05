@@ -1,0 +1,19 @@
+# Rendered at container start into $NGINX_ENVSUBST_OUTPUT_DIR.
+server {
+    listen 8080;
+    root /usr/share/nginx/html;
+    index index.html;
+
+    # Same limit as the default BODY_LIMIT of the store.
+    client_max_body_size 50m;
+
+    # A variable in proxy_pass resolves the backend per request, so the front still
+    # starts when the backend is not up yet (the API answers 502 until it is).
+    resolver ${NGINX_LOCAL_RESOLVERS} valid=10s;
+
+    location /api/v2/ {
+        set $backend ${EXCALIDRAW_BACKEND_URL};
+        proxy_pass $backend;
+        proxy_ssl_server_name on;
+    }
+}
