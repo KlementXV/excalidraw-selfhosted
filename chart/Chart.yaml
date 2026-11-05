@@ -1,0 +1,16 @@
+apiVersion: v2
+name: excalidraw
+description: "Self-hosted Excalidraw: front, scene store, PostgreSQL and optional MCP server"
+type: application
+# Chart version: bump on every chart change.
+version: 0.1.0
+# Tag of the front image when front.image.tag is empty.
+appVersion: "v0.18.1"
+kubeVersion: ">=1.25.0-0"
+home: https://github.com/KlementXV/excalidraw-selfhosted
+sources:
+  - https://github.com/KlementXV/excalidraw-selfhosted
+  - https://github.com/kitsteam/excalidraw-storage-backend
+keywords:
+  - excalidraw
+  - mcp

@@ -1,0 +1,78 @@
+{{- $component := dict "ctx" . "component" "front" -}}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "excalidraw.fullname" . }}-front
+  labels:
+    {{- include "excalidraw.labels" $component | nindent 4 }}
+spec:
+  replicas: {{ .Values.front.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "excalidraw.selectorLabels" $component | nindent 6 }}
+  template:
+    metadata:
+      {{- with .Values.podAnnotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      labels:
+        {{- include "excalidraw.labels" $component | nindent 8 }}
+    spec:
+      {{- include "excalidraw.podSpec" . | nindent 6 }}
+      securityContext:
+        {{- include "excalidraw.podSecurityContext" 10001 | nindent 8 }}
+      containers:
+        - name: front
+          image: {{ include "excalidraw.frontImage" . | quote }}
+          imagePullPolicy: {{ .Values.front.image.pullPolicy }}
+          securityContext:
+            {{- include "excalidraw.securityContext" . | nindent 12 }}
+          ports:
+            - name: http
+              containerPort: 8080
+              protocol: TCP
+          env:
+            - name: EXCALIDRAW_BACKEND_URL
+              value: {{ include "excalidraw.storageUrl" . | quote }}
+          startupProbe:
+            httpGet:
+              path: /
+              port: http
+            periodSeconds: 2
+            failureThreshold: 30
+          livenessProbe:
+            httpGet:
+              path: /
+              port: http
+            periodSeconds: 15
+          readinessProbe:
+            httpGet:
+              path: /
+              port: http
+            periodSeconds: 10
+          resources:
+            {{- toYaml .Values.front.resources | nindent 12 }}
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: tmp
+          emptyDir:
+            sizeLimit: 64Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "excalidraw.fullname" . }}-front
+  labels:
+    {{- include "excalidraw.labels" $component | nindent 4 }}
+spec:
+  type: ClusterIP
+  ports:
+    - name: http
+      port: 8080
+      targetPort: http
+      protocol: TCP
+  selector:
+    {{- include "excalidraw.selectorLabels" $component | nindent 4 }}

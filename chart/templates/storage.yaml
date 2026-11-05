@@ -1,0 +1,107 @@
+{{- $component := dict "ctx" . "component" "storage" -}}
+{{- $fullname := include "excalidraw.fullname" . -}}
+{{- if and (not .Values.postgresql.enabled) (not .Values.externalDatabase.existingSecret) }}
+{{- fail "Set externalDatabase.existingSecret when postgresql.enabled is false" }}
+{{- end -}}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ $fullname }}-storage
+  labels:
+    {{- include "excalidraw.labels" $component | nindent 4 }}
+spec:
+  replicas: {{ .Values.storage.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "excalidraw.selectorLabels" $component | nindent 6 }}
+  template:
+    metadata:
+      {{- with .Values.podAnnotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      labels:
+        {{- include "excalidraw.labels" $component | nindent 8 }}
+    spec:
+      {{- include "excalidraw.podSpec" . | nindent 6 }}
+      securityContext:
+        {{- include "excalidraw.podSecurityContext" 1000 | nindent 8 }}
+      containers:
+        - name: storage
+          image: {{ include "excalidraw.image" (dict "ctx" . "image" .Values.storage.image) | quote }}
+          imagePullPolicy: {{ .Values.storage.image.pullPolicy }}
+          securityContext:
+            {{- include "excalidraw.securityContext" . | nindent 12 }}
+          ports:
+            - name: http
+              containerPort: 8080
+              protocol: TCP
+          env:
+            {{- if .Values.postgresql.enabled }}
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.postgresql.auth.existingSecret | default (printf "%s-postgresql" $fullname) }}
+                  key: password
+            - name: STORAGE_URI
+              value: "postgres://postgres:$(POSTGRES_PASSWORD)@{{ $fullname }}-postgresql:5432/{{ .Values.postgresql.database }}"
+            {{- else }}
+            - name: STORAGE_URI
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.externalDatabase.existingSecret }}
+                  key: {{ .Values.externalDatabase.secretKey }}
+            {{- end }}
+            - name: STORAGE_TTL
+              value: {{ .Values.storage.ttl | int64 | quote }}
+            - name: ENABLE_POSTGRES_TTL_SERVICE
+              value: {{ .Values.storage.cleanup | quote }}
+            - name: BODY_LIMIT
+              value: {{ .Values.storage.bodyLimit | quote }}
+            # pnpm writes to its home when the image starts.
+            - name: HOME
+              value: /tmp
+          startupProbe:
+            httpGet:
+              path: /api/v2/health
+              port: http
+            periodSeconds: 3
+            timeoutSeconds: 3
+            failureThreshold: 60
+          livenessProbe:
+            httpGet:
+              path: /api/v2/health
+              port: http
+            periodSeconds: 15
+            timeoutSeconds: 3
+          readinessProbe:
+            httpGet:
+              path: /api/v2/health
+              port: http
+            periodSeconds: 10
+            timeoutSeconds: 3
+          resources:
+            {{- toYaml .Values.storage.resources | nindent 12 }}
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: tmp
+          emptyDir:
+            sizeLimit: 64Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ $fullname }}-storage
+  labels:
+    {{- include "excalidraw.labels" $component | nindent 4 }}
+spec:
+  type: ClusterIP
+  ports:
+    - name: http
+      port: 8080
+      targetPort: http
+      protocol: TCP
+  selector:
+    {{- include "excalidraw.selectorLabels" $component | nindent 4 }}

@@ -1,0 +1,68 @@
+# Publishes the chart to GHCR and to a GitHub release when its version changes.
+name: Chart release
+
+on:
+  push:
+    branches:
+      - self-hosted
+    paths:
+      - "chart/**"
+      - ".github/workflows/chart-release.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  packages: write
+
+concurrency:
+  group: chart-release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Check whether this version is already released
+        id: chart
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          version="$(sed -n 's/^version: //p' chart/Chart.yaml)"
+          tag="chart-$version"
+          if gh release view "$tag" > /dev/null 2>&1; then
+            echo "::notice::Chart $version is already released. Bump version in chart/Chart.yaml to publish these changes."
+            publish=false
+          else
+            publish=true
+          fi
+          {
+            echo "version=$version"
+            echo "tag=$tag"
+            echo "publish=$publish"
+          } >> "$GITHUB_OUTPUT"
+
+      - uses: azure/setup-helm@v5
+        if: steps.chart.outputs.publish == 'true'
+
+      - name: Publish
+        if: steps.chart.outputs.publish == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.chart.outputs.version }}
+          TAG: ${{ steps.chart.outputs.tag }}
+        run: |
+          owner="$(printf '%s' "$GITHUB_REPOSITORY_OWNER" | tr '[:upper:]' '[:lower:]')"
+
+          helm lint chart
+          helm package chart
+
+          printf '%s' "$GH_TOKEN" | helm registry login ghcr.io --username "$GITHUB_ACTOR" --password-stdin
+          helm push "excalidraw-$VERSION.tgz" "oci://ghcr.io/$owner/charts"
+
+          # Last: its existence marks the version as published, so a failed run can be retried.
+          gh release create "$TAG" "excalidraw-$VERSION.tgz" \
+            --target "$GITHUB_SHA" \
+            --title "Chart $VERSION" \
+            --notes "helm install excalidraw oci://ghcr.io/$owner/charts/excalidraw --version $VERSION"

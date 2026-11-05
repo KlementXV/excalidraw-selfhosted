@@ -1,0 +1,44 @@
+{{- if .Values.ingress.enabled -}}
+{{- $fullname := include "excalidraw.fullname" . -}}
+{{- $host := include "excalidraw.host" . -}}
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ $fullname }}
+  labels:
+    {{- include "excalidraw.labels" (dict "ctx" . "component" "front") | nindent 4 }}
+  {{- with .Values.ingress.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  {{- with .Values.ingress.className }}
+  ingressClassName: {{ . }}
+  {{- end }}
+  {{- with .Values.ingress.tlsSecretName }}
+  tls:
+    - hosts:
+        - {{ $host | quote }}
+      secretName: {{ . }}
+  {{- end }}
+  rules:
+    - host: {{ $host | quote }}
+      http:
+        paths:
+          {{- if and .Values.mcp.enabled .Values.mcp.expose }}
+          - path: /mcp
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ $fullname }}-mcp
+                port:
+                  name: http
+          {{- end }}
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ $fullname }}-front
+                port:
+                  name: http
+{{- end }}

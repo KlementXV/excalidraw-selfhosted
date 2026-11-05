@@ -1,0 +1,31 @@
+# Checks the path of the browser: front, relay, store and database.
+apiVersion: v1
+kind: Pod
+metadata:
+  name: {{ include "excalidraw.fullname" . }}-test
+  labels:
+    {{- include "excalidraw.labels" (dict "ctx" . "component" "helm-test") | nindent 4 }}
+  annotations:
+    helm.sh/hook: test
+    helm.sh/hook-delete-policy: before-hook-creation,hook-succeeded
+spec:
+  restartPolicy: Never
+  {{- include "excalidraw.podSpec" . | nindent 2 }}
+  securityContext:
+    {{- include "excalidraw.podSecurityContext" 10001 | nindent 4 }}
+  containers:
+    - name: test
+      image: {{ include "excalidraw.frontImage" . | quote }}
+      imagePullPolicy: {{ .Values.front.image.pullPolicy }}
+      securityContext:
+        {{- include "excalidraw.securityContext" . | nindent 8 }}
+      command:
+        - sh
+        - -ec
+        - |
+          wget -q -O /dev/null "http://{{ include "excalidraw.fullname" . }}-front:8080/"
+          wget -q -O /dev/null "http://{{ include "excalidraw.fullname" . }}-front:8080/api/v2/health"
+          echo OK
+      resources:
+        limits:
+          memory: 32Mi

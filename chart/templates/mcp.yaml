@@ -1,0 +1,82 @@
+{{- if .Values.mcp.enabled -}}
+{{- $component := dict "ctx" . "component" "mcp" -}}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "excalidraw.fullname" . }}-mcp
+  labels:
+    {{- include "excalidraw.labels" $component | nindent 4 }}
+spec:
+  replicas: {{ .Values.mcp.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "excalidraw.selectorLabels" $component | nindent 6 }}
+  template:
+    metadata:
+      {{- with .Values.podAnnotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      labels:
+        {{- include "excalidraw.labels" $component | nindent 8 }}
+    spec:
+      {{- include "excalidraw.podSpec" . | nindent 6 }}
+      securityContext:
+        {{- include "excalidraw.podSecurityContext" 10001 | nindent 8 }}
+      containers:
+        - name: mcp
+          image: {{ include "excalidraw.image" (dict "ctx" . "image" .Values.mcp.image) | quote }}
+          imagePullPolicy: {{ .Values.mcp.image.pullPolicy }}
+          securityContext:
+            {{- include "excalidraw.securityContext" . | nindent 12 }}
+          ports:
+            - name: http
+              containerPort: 3001
+              protocol: TCP
+          env:
+            - name: PORT
+              value: "3001"
+            - name: EXCALIDRAW_STORE_URL
+              value: "{{ include "excalidraw.storageUrl" . }}/api/v2/scenes/"
+            - name: EXCALIDRAW_APP_URL
+              value: {{ include "excalidraw.publicUrl" . | quote }}
+          # TCP: GET /mcp answers 406 without the MCP headers.
+          startupProbe:
+            tcpSocket:
+              port: http
+            periodSeconds: 2
+            failureThreshold: 30
+          livenessProbe:
+            tcpSocket:
+              port: http
+            periodSeconds: 15
+          readinessProbe:
+            tcpSocket:
+              port: http
+            periodSeconds: 10
+          resources:
+            {{- toYaml .Values.mcp.resources | nindent 12 }}
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: tmp
+          emptyDir:
+            sizeLimit: {{ .Values.mcp.tmpSize }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "excalidraw.fullname" . }}-mcp
+  labels:
+    {{- include "excalidraw.labels" $component | nindent 4 }}
+spec:
+  type: ClusterIP
+  ports:
+    - name: http
+      port: 3001
+      targetPort: http
+      protocol: TCP
+  selector:
+    {{- include "excalidraw.selectorLabels" $component | nindent 4 }}
+{{- end }}

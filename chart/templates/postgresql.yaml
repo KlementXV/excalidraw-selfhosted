@@ -1,0 +1,125 @@
+{{- if .Values.postgresql.enabled -}}
+{{- $component := dict "ctx" . "component" "postgresql" -}}
+{{- $name := printf "%s-postgresql" (include "excalidraw.fullname" .) -}}
+{{- if not .Values.postgresql.auth.existingSecret }}
+{{- $existing := lookup "v1" "Secret" .Release.Namespace $name -}}
+{{- $current := "" -}}
+{{- if $existing }}{{ $current = index $existing.data "password" | b64dec }}{{ end -}}
+apiVersion: v1
+kind: Secret
+metadata:
+  name: {{ $name }}
+  labels:
+    {{- include "excalidraw.labels" $component | nindent 4 }}
+  annotations:
+    # Kept with the volume: a reinstall must find the password of the existing database.
+    helm.sh/resource-policy: keep
+type: Opaque
+data:
+  password: {{ .Values.postgresql.auth.password | default $current | default (randAlphaNum 32) | b64enc | quote }}
+---
+{{- end }}
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: {{ $name }}
+  labels:
+    {{- include "excalidraw.labels" $component | nindent 4 }}
+spec:
+  serviceName: {{ $name }}
+  replicas: 1
+  selector:
+    matchLabels:
+      {{- include "excalidraw.selectorLabels" $component | nindent 6 }}
+  template:
+    metadata:
+      {{- with .Values.podAnnotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      labels:
+        {{- include "excalidraw.labels" $component | nindent 8 }}
+    spec:
+      {{- include "excalidraw.podSpec" . | nindent 6 }}
+      securityContext:
+        {{- include "excalidraw.podSecurityContext" 70 | nindent 8 }}
+      containers:
+        - name: postgresql
+          image: {{ include "excalidraw.image" (dict "ctx" . "image" .Values.postgresql.image) | quote }}
+          imagePullPolicy: {{ .Values.postgresql.image.pullPolicy }}
+          securityContext:
+            {{- include "excalidraw.securityContext" . | nindent 12 }}
+          ports:
+            - name: postgresql
+              containerPort: 5432
+              protocol: TCP
+          env:
+            - name: POSTGRES_DB
+              value: {{ .Values.postgresql.database | quote }}
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.postgresql.auth.existingSecret | default $name }}
+                  key: password
+            # A subdirectory: the root of a volume can hold lost+found.
+            - name: PGDATA
+              value: /var/lib/postgresql/data/pgdata
+          startupProbe:
+            exec:
+              command: ["pg_isready", "-U", "postgres"]
+            periodSeconds: 3
+            failureThreshold: 60
+          livenessProbe:
+            exec:
+              command: ["pg_isready", "-U", "postgres"]
+            periodSeconds: 15
+            timeoutSeconds: 5
+          readinessProbe:
+            exec:
+              command: ["pg_isready", "-U", "postgres"]
+            periodSeconds: 10
+            timeoutSeconds: 5
+          resources:
+            {{- toYaml .Values.postgresql.resources | nindent 12 }}
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/postgresql/data
+            - name: run
+              mountPath: /var/run/postgresql
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: run
+          emptyDir: {}
+        - name: tmp
+          emptyDir:
+            sizeLimit: 64Mi
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes:
+          {{- toYaml .Values.postgresql.persistence.accessModes | nindent 10 }}
+        {{- with .Values.postgresql.persistence.storageClass }}
+        storageClassName: {{ . | quote }}
+        {{- end }}
+        resources:
+          requests:
+            storage: {{ .Values.postgresql.persistence.size }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ $name }}
+  labels:
+    {{- include "excalidraw.labels" $component | nindent 4 }}
+spec:
+  type: ClusterIP
+  ports:
+    - name: postgresql
+      port: 5432
+      targetPort: postgresql
+      protocol: TCP
+  selector:
+    {{- include "excalidraw.selectorLabels" $component | nindent 4 }}
+{{- end }}

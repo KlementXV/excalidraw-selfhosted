@@ -1,0 +1,81 @@
+{{- if .Values.networkPolicy.enabled -}}
+{{- $root := . -}}
+# Only the front and the MCP server may reach the store.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "excalidraw.fullname" . }}-storage
+  labels:
+    {{- include "excalidraw.labels" (dict "ctx" . "component" "storage") | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "excalidraw.selectorLabels" (dict "ctx" . "component" "storage") | nindent 6 }}
+  policyTypes:
+    - Ingress
+  ingress:
+    - ports:
+        - port: http
+          protocol: TCP
+      from:
+        - podSelector:
+            matchLabels:
+              {{- include "excalidraw.selectorLabels" (dict "ctx" . "component" "front") | nindent 14 }}
+        {{- if .Values.mcp.enabled }}
+        - podSelector:
+            matchLabels:
+              {{- include "excalidraw.selectorLabels" (dict "ctx" . "component" "mcp") | nindent 14 }}
+        {{- end }}
+{{- if .Values.postgresql.enabled }}
+---
+# Only the store may reach PostgreSQL.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "excalidraw.fullname" . }}-postgresql
+  labels:
+    {{- include "excalidraw.labels" (dict "ctx" . "component" "postgresql") | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "excalidraw.selectorLabels" (dict "ctx" . "component" "postgresql") | nindent 6 }}
+  policyTypes:
+    - Ingress
+  ingress:
+    - ports:
+        - port: postgresql
+          protocol: TCP
+      from:
+        - podSelector:
+            matchLabels:
+              {{- include "excalidraw.selectorLabels" (dict "ctx" . "component" "storage") | nindent 14 }}
+{{- end }}
+{{- if .Values.mcp.enabled }}
+---
+# The MCP endpoint has no authentication: only the listed peers may reach it.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "excalidraw.fullname" . }}-mcp
+  labels:
+    {{- include "excalidraw.labels" (dict "ctx" . "component" "mcp") | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "excalidraw.selectorLabels" (dict "ctx" . "component" "mcp") | nindent 6 }}
+  policyTypes:
+    - Ingress
+  ingress:
+    - ports:
+        - port: http
+          protocol: TCP
+      from:
+        - podSelector: {}
+        {{- with .Values.networkPolicy.mcpFrom }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+        {{- if .Values.mcp.expose }}
+        {{- toYaml .Values.networkPolicy.controllerFrom | nindent 8 }}
+        {{- end }}
+{{- end }}
+{{- end }}

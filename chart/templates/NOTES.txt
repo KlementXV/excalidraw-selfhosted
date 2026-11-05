@@ -1,0 +1,24 @@
+Excalidraw is deployed in namespace {{ .Release.Namespace }}.
+
+Front: {{ include "excalidraw.publicUrl" . }}
+{{- if not (or .Values.ingress.enabled .Values.gateway.enabled) }}
+  Neither ingress nor gateway is enabled. To try it locally:
+    kubectl -n {{ .Release.Namespace }} port-forward svc/{{ include "excalidraw.fullname" . }}-front 8080:8080
+  Then open http://localhost:8080
+{{- end }}
+{{- if .Values.mcp.enabled }}
+
+MCP endpoint (in-cluster): http://{{ include "excalidraw.fullname" . }}-mcp.{{ .Release.Namespace }}.svc.{{ .Values.clusterDomain }}:3001/mcp
+{{- if .Values.mcp.expose }}
+  WARNING: /mcp is routed on {{ include "excalidraw.host" . }} and has no authentication. Put an
+  authenticating ingress or gateway in front.
+{{- else if .Values.networkPolicy.enabled }}
+  Only pods of this namespace can reach it. Add other clients to networkPolicy.mcpFrom.
+{{- end }}
+{{- end }}
+
+Check it: helm test {{ .Release.Name }} -n {{ .Release.Namespace }}
+{{- if .Values.postgresql.enabled }}
+
+The PostgreSQL volume and password Secret are kept after helm uninstall. Delete them to remove the scenes.
+{{- end }}

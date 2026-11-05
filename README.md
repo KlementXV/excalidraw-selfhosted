@@ -24,7 +24,7 @@ flowchart LR
 | Component | Image | Port |
 |-----------|-------|------|
 | Excalidraw front | `ghcr.io/klementxv/excalidraw-front` | 8080 |
-| MCP server | Built from this repository | 3001 |
+| MCP server | `ghcr.io/klementxv/excalidraw-mcp` | 3001 |
 | Scene store | `ghcr.io/kitsteam/excalidraw-storage-backend` | 8080 |
 | Database | PostgreSQL | 5432 |
 
@@ -78,13 +78,23 @@ docker compose up -d
 - Excalidraw: <http://localhost:8080>
 - MCP endpoint: <http://localhost:3001/mcp>
 
+## Kubernetes
+
+The [Helm chart](chart/README.md) deploys the whole stack, with Ingress or Gateway API, an optional MCP server and a choice of StorageClass:
+
+```bash
+helm install excalidraw oci://ghcr.io/klementxv/charts/excalidraw -n excalidraw --create-namespace \
+  --set publicUrl=https://excalidraw.example.com \
+  --set ingress.enabled=true
+```
+
 ## Configuration
 
 ### Excalidraw front
 
 | Variable | Default | Purpose |
 |----------|---------|---------|
-| `EXCALIDRAW_BACKEND_URL` | `http://storage:8080` | Scene store, without a path. It must serve `/api/v2/` |
+| `EXCALIDRAW_BACKEND_URL` | `http://storage:8080` | Scene store, without a path. It must serve `/api/v2/`. On Kubernetes, use the full service name |
 
 ### MCP server
 
@@ -119,11 +129,15 @@ docker compose up -d
 
 ## Updates
 
-The `Excalidraw front` workflow checks the latest Excalidraw release every day. It builds and pushes `excalidraw-front:<tag>` and `:latest` only if that tag is not in the registry yet.
+| Workflow | Runs on | Result |
+|----------|---------|--------|
+| `Excalidraw front` | Manual run, or a push to `excalidraw-front/` | Builds the latest Excalidraw release into `excalidraw-front:<tag>` and `:latest` |
+| `Excalidraw MCP` | Manual run, or a push to the MCP server code | Publishes `excalidraw-mcp:<version>` and `:latest` |
+| `Chart release` | Manual run, or a push to `chart/` with a new chart version | Publishes the chart to GHCR and to a GitHub release |
 
-To build another version, run the workflow manually with a tag or branch in `ref`. Use `force` to replace an existing image.
+Nothing watches Excalidraw for new releases. To pick one up, run `Excalidraw front` manually: it builds the new tag and opens a pull request that updates the chart. Merging it publishes a new chart version.
 
-GitHub disables scheduled workflows after 60 days without activity on public repositories, so check that this one stays enabled.
+A manual run skips the build if the image already exists. Use `force` to replace it, or `ref` to build another tag or branch.
 
 To get the MCP server changes from the original project:
 

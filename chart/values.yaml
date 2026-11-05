@@ -1,0 +1,143 @@
+# Default values for excalidraw.
+
+global:
+  # -- Registry for every image, e.g. registry.example.com. Empty: the registry of each image.
+  imageRegistry: ""
+
+# -- Public URL of the front. Sets the Ingress and HTTPRoute host, and the MCP share links.
+# Use https: browsers only decrypt shared scenes over HTTPS or on localhost.
+publicUrl: https://excalidraw.example.com
+
+# -- Pull secrets for every pod, e.g. [{name: my-registry}].
+imagePullSecrets: []
+nameOverride: ""
+fullnameOverride: ""
+# -- Cluster DNS domain. The front's nginx needs the full service name to reach the store.
+clusterDomain: cluster.local
+
+ingress:
+  # -- Expose the stack with an Ingress.
+  enabled: false
+  className: ""
+  # -- Set the upload limit here if your controller has one (at least storage.bodyLimit),
+  # and a rate limit: the store has no authentication.
+  annotations: {}
+  # -- TLS secret for the host of publicUrl. Empty: no TLS section.
+  tlsSecretName: ""
+
+gateway:
+  # -- Expose the stack with a Gateway API HTTPRoute. The Gateway itself is not created.
+  enabled: false
+  # -- Required when enabled, e.g. [{name: main, namespace: gateway, sectionName: https}].
+  parentRefs: []
+  annotations: {}
+
+networkPolicy:
+  # -- Keep the store and PostgreSQL internal, and limit who can reach the MCP server.
+  # The front stays reachable by everyone: it is the public entry point.
+  enabled: true
+  # -- More peers allowed to reach the MCP server (list of NetworkPolicyPeer). Pods of the
+  # release namespace are always allowed.
+  mcpFrom: []
+  # -- Peers allowed when mcp.expose is true: your ingress or gateway controller
+  # (kube-system for k3s' Traefik).
+  controllerFrom:
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: kube-system
+
+front:
+  image:
+    registry: ghcr.io
+    repository: klementxv/excalidraw-front
+    # -- Empty: the chart appVersion.
+    tag: ""
+    pullPolicy: IfNotPresent
+  replicaCount: 1
+  resources:
+    requests:
+      cpu: 20m
+      memory: 32Mi
+    limits:
+      memory: 128Mi
+
+mcp:
+  # -- Deploy the MCP server.
+  enabled: true
+  # -- Also route /mcp on the public host. The endpoint has no authentication: only with an
+  # authenticating ingress or gateway in front.
+  expose: false
+  image:
+    registry: ghcr.io
+    repository: klementxv/excalidraw-mcp
+    tag: "0.3.2"
+    pullPolicy: IfNotPresent
+  # -- Keep 1: checkpoints live in /tmp, separately on each replica, and are lost on restart.
+  replicaCount: 1
+  # -- Size of /tmp, which holds the checkpoints.
+  tmpSize: 256Mi
+  resources:
+    requests:
+      cpu: 50m
+      memory: 128Mi
+    limits:
+      memory: 384Mi
+
+storage:
+  image:
+    registry: ghcr.io
+    repository: kitsteam/excalidraw-storage-backend
+    tag: v0.2.5
+    pullPolicy: IfNotPresent
+  replicaCount: 1
+  # -- Lifetime of stored scenes in milliseconds (one year). Share links stop working after it.
+  ttl: 31536000000
+  # -- Delete expired scenes once a day.
+  cleanup: true
+  # -- Maximum upload size.
+  bodyLimit: 50mb
+  resources:
+    requests:
+      cpu: 50m
+      memory: 128Mi
+    limits:
+      memory: 384Mi
+
+postgresql:
+  # -- Deploy PostgreSQL. False: set externalDatabase.existingSecret.
+  enabled: true
+  image:
+    registry: docker.io
+    repository: library/postgres
+    tag: 15-alpine
+    pullPolicy: IfNotPresent
+  database: excalidraw
+  auth:
+    # -- Empty: generated at install and kept across upgrades. Changing it later does not
+    # change the password of an existing database.
+    password: ""
+    # -- Secret holding the password (key "password"), instead of the value above. It must
+    # be URL-safe, since it goes into the connection string.
+    existingSecret: ""
+  persistence:
+    size: 5Gi
+    # -- Empty: the default StorageClass of the cluster.
+    storageClass: ""
+    accessModes:
+      - ReadWriteOnce
+  resources:
+    requests:
+      cpu: 50m
+      memory: 128Mi
+    limits:
+      memory: 512Mi
+
+externalDatabase:
+  # -- Used when postgresql.enabled is false: Secret holding the PostgreSQL connection string.
+  existingSecret: ""
+  secretKey: uri
+
+podAnnotations: {}
+nodeSelector: {}
+tolerations: []
+affinity: {}

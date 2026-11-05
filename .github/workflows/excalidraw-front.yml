@@ -1,12 +1,16 @@
-# Rebuilds the Excalidraw front whenever upstream publishes a release.
+# Builds the Excalidraw front from the latest upstream release, or from a chosen ref.
 #
-# GitHub cannot trigger on a release of another repository, so this polls: an image
-# tag that already exists in the registry means that release is already built.
+# Nothing watches upstream: GitHub cannot trigger on a release of another repository.
+# Run this manually to pick up a new release.
 name: Excalidraw front
 
 on:
-  schedule:
-    - cron: "17 4 * * *"
+  push:
+    branches:
+      - self-hosted
+    paths:
+      - "excalidraw-front/**"
+      - ".github/workflows/excalidraw-front.yml"
   workflow_dispatch:
     inputs:
       ref:
@@ -19,8 +23,9 @@ on:
         default: false
 
 permissions:
-  contents: read
+  contents: write
   packages: write
+  pull-requests: write
 
 concurrency:
   group: excalidraw-front
@@ -58,7 +63,9 @@ jobs:
           # A branch name such as feature/x is not a valid image tag.
           tag="$(printf '%s' "$ref" | tr -c 'A-Za-z0-9_.-' '-')"
 
-          if [ "$FORCE" != "true" ] && docker manifest inspect "$image:$tag" > /dev/null 2>&1; then
+          # A push changes the image itself, so it always rebuilds.
+          if [ "$GITHUB_EVENT_NAME" != "push" ] && [ "$FORCE" != "true" ] \
+            && docker manifest inspect "$image:$tag" > /dev/null 2>&1; then
             echo "$image:$tag already exists, nothing to build."
             build=false
           else
@@ -89,3 +96,35 @@ jobs:
           labels: |
             org.opencontainers.image.source=https://github.com/${{ github.repository }}
             org.opencontainers.image.version=${{ steps.release.outputs.ref }}
+
+      - name: Open a pull request to update the chart
+        if: steps.release.outputs.is_latest == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REF: ${{ steps.release.outputs.ref }}
+          BASE: ${{ github.event.repository.default_branch }}
+        run: |
+          current="$(sed -n 's/^appVersion: "\(.*\)"$/\1/p' chart/Chart.yaml)"
+          if [ "$current" = "$REF" ]; then
+            echo "The chart already uses $REF."
+            exit 0
+          fi
+
+          # The next chart version: bump the patch number.
+          version="$(sed -n 's/^version: //p' chart/Chart.yaml)"
+          next="${version%.*}.$(( ${version##*.} + 1 ))"
+          sed -i "s/^appVersion: .*/appVersion: \"$REF\"/; s/^version: .*/version: $next/" chart/Chart.yaml
+
+          branch="chart/excalidraw-$REF"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git switch -c "$branch"
+          git add chart/Chart.yaml
+          git commit -m "chore(chart): use Excalidraw $REF"
+          git push --force origin "$branch"
+
+          if [ -z "$(gh pr list --head "$branch" --state open --json number --jq '.[].number')" ]; then
+            gh pr create --base "$BASE" --head "$branch" \
+              --title "chore(chart): use Excalidraw $REF" \
+              --body "The front image for $REF is published. Merging this publishes chart version $next."
+          fi
