@@ -1,7 +1,9 @@
+{{- if .Values.storage.enabled -}}
 {{- $component := dict "ctx" . "component" "storage" -}}
 {{- $fullname := include "excalidraw.fullname" . -}}
-{{- if and (not .Values.postgresql.enabled) (not .Values.externalDatabase.existingSecret) }}
-{{- fail "Set externalDatabase.existingSecret when postgresql.enabled is false" }}
+{{- $database := include "excalidraw.database" . -}}
+{{- if and (eq $database "external") (not .Values.externalDatabase.existingSecret) }}
+{{- fail "Set externalDatabase.existingSecret, cnpg.enabled or postgresql.enabled" }}
 {{- end -}}
 apiVersion: apps/v1
 kind: Deployment
@@ -37,7 +39,14 @@ spec:
               containerPort: 8080
               protocol: TCP
           env:
-            {{- if .Values.postgresql.enabled }}
+            {{- if eq $database "cnpg" }}
+            # Created by the operator when the Cluster is ready.
+            - name: STORAGE_URI
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "excalidraw.cnpgName" . }}-app
+                  key: uri
+            {{- else if eq $database "postgresql" }}
             - name: POSTGRES_PASSWORD
               valueFrom:
                 secretKeyRef:
@@ -105,3 +114,4 @@ spec:
       protocol: TCP
   selector:
     {{- include "excalidraw.selectorLabels" $component | nindent 4 }}
+{{- end }}

@@ -17,8 +17,20 @@ MCP endpoint (in-cluster): http://{{ include "excalidraw.fullname" . }}-mcp.{{ .
 {{- end }}
 {{- end }}
 
+{{- if not (include "excalidraw.storageUrl" .) }}
+
+No scene store: drawing works, but share links do not (the front answers 502 on /api/v2/).
+{{- end }}
+
 Check it: helm test {{ .Release.Name }} -n {{ .Release.Namespace }}
-{{- if .Values.postgresql.enabled }}
+{{- $database := include "excalidraw.database" . }}
+{{- if eq $database "postgresql" }}
 
 The PostgreSQL volume and password Secret are kept after helm uninstall. Delete them to remove the scenes.
+{{- else if eq $database "cnpg" }}
+
+CloudNativePG Cluster: {{ include "excalidraw.cnpgName" . }}
+{{- if .Values.cnpg.keepOnUninstall }}
+  It is kept after helm uninstall. To remove the scenes: kubectl -n {{ .Release.Namespace }} delete cluster {{ include "excalidraw.cnpgName" . }}
+{{- end }}
 {{- end }}

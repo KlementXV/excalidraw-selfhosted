@@ -1,0 +1,21 @@
+{{- if eq (include "excalidraw.database" .) "cnpg" -}}
+{{- $component := dict "ctx" . "component" "cnpg" -}}
+apiVersion: postgresql.cnpg.io/v1
+kind: Cluster
+metadata:
+  name: {{ include "excalidraw.cnpgName" . }}
+  labels:
+    {{- include "excalidraw.labels" $component | nindent 4 }}
+  {{- if .Values.cnpg.keepOnUninstall }}
+  annotations:
+    # Deleting the Cluster also deletes its volumes: helm uninstall must not lose the scenes.
+    helm.sh/resource-policy: keep
+  {{- end }}
+spec:
+  {{- $spec := dict "instances" .Values.cnpg.instances "storage" (dict "size" .Values.cnpg.storage.size) "bootstrap" (dict "initdb" (dict "database" .Values.cnpg.database "owner" .Values.cnpg.owner)) -}}
+  {{- with .Values.cnpg.imageName }}{{ $_ := set $spec "imageName" . }}{{ end -}}
+  {{- with .Values.cnpg.storage.storageClass }}{{ $_ := set $spec.storage "storageClass" . }}{{ end -}}
+  {{- with .Values.cnpg.resources }}{{ $_ := set $spec "resources" . }}{{ end -}}
+  {{- with .Values.imagePullSecrets }}{{ $_ := set $spec "imagePullSecrets" . }}{{ end -}}
+  {{- toYaml (mustMergeOverwrite $spec (deepCopy .Values.cnpg.extraSpec)) | nindent 2 }}
+{{- end }}

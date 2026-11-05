@@ -32,9 +32,11 @@ spec:
             - name: http
               containerPort: 8080
               protocol: TCP
+          {{- with include "excalidraw.storageUrl" . }}
           env:
             - name: EXCALIDRAW_BACKEND_URL
-              value: {{ include "excalidraw.storageUrl" . | quote }}
+              value: {{ . | quote }}
+          {{- end }}
           startupProbe:
             httpGet:
               path: /

@@ -1,4 +1,4 @@
-{{- if .Values.postgresql.enabled -}}
+{{- if eq (include "excalidraw.database" .) "postgresql" -}}
 {{- $component := dict "ctx" . "component" "postgresql" -}}
 {{- $name := printf "%s-postgresql" (include "excalidraw.fullname" .) -}}
 {{- if not .Values.postgresql.auth.existingSecret }}

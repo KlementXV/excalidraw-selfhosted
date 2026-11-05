@@ -39,6 +39,9 @@ networkPolicy:
   # -- More peers allowed to reach the MCP server (list of NetworkPolicyPeer). Pods of the
   # release namespace are always allowed.
   mcpFrom: []
+  # -- More peers allowed to reach the CloudNativePG instances, such as Prometheus
+  # (list of NetworkPolicyPeer).
+  cnpgFrom: []
   # -- Peers allowed when mcp.expose is true: your ingress or gateway controller
   # (kube-system for k3s' Traefik).
   controllerFrom:
@@ -84,6 +87,12 @@ mcp:
       memory: 384Mi
 
 storage:
+  # -- Deploy the scene store and its database. False: nothing is stored here. Set externalUrl
+  # to use another store, or leave it empty for a front without share links (requires
+  # mcp.enabled=false, since the MCP server needs a store).
+  enabled: true
+  # -- Store to use when enabled is false, without a path. It must serve /api/v2/.
+  externalUrl: ""
   image:
     registry: ghcr.io
     repository: kitsteam/excalidraw-storage-backend
@@ -103,8 +112,40 @@ storage:
     limits:
       memory: 384Mi
 
+# -- Database of the store, in order of priority: cnpg.enabled, then postgresql.enabled, then
+# externalDatabase.
+
+cnpg:
+  # -- Create a CloudNativePG Cluster instead of the PostgreSQL StatefulSet. The operator must
+  # already be installed in the cluster.
+  enabled: false
+  # -- Number of PostgreSQL instances: one primary, the others are replicas.
+  instances: 1
+  # -- Empty: the default PostgreSQL image of the operator. global.imageRegistry does not apply
+  # here, so set the full image when using a private registry.
+  imageName: ""
+  database: excalidraw
+  owner: excalidraw
+  storage:
+    size: 5Gi
+    # -- Empty: the default StorageClass of the cluster.
+    storageClass: ""
+  resources:
+    requests:
+      cpu: 50m
+      memory: 256Mi
+    limits:
+      memory: 1Gi
+  # -- Keep the Cluster and its volumes after helm uninstall. False: uninstalling deletes the scenes.
+  keepOnUninstall: true
+  # -- Namespace of the operator, which must reach the instances (networkPolicy).
+  operatorNamespace: cnpg-system
+  # -- More fields of the Cluster spec, such as backup, affinity or monitoring. Overrides the
+  # fields above.
+  extraSpec: {}
+
 postgresql:
-  # -- Deploy PostgreSQL. False: set externalDatabase.existingSecret.
+  # -- Deploy PostgreSQL. False, without cnpg: set externalDatabase.existingSecret.
   enabled: true
   image:
     registry: docker.io
@@ -133,7 +174,7 @@ postgresql:
       memory: 512Mi
 
 externalDatabase:
-  # -- Used when postgresql.enabled is false: Secret holding the PostgreSQL connection string.
+  # -- Used without cnpg or postgresql: Secret holding the PostgreSQL connection string.
   existingSecret: ""
   secretKey: uri
 

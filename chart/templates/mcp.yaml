@@ -1,4 +1,8 @@
 {{- if .Values.mcp.enabled -}}
+{{- /* Without a store URL, the server would upload diagrams to excalidraw.com. */ -}}
+{{- if not (include "excalidraw.storageUrl" .) }}
+{{- fail "mcp.enabled needs a store: set storage.enabled=true or storage.externalUrl, or mcp.enabled=false" }}
+{{- end -}}
 {{- $component := dict "ctx" . "component" "mcp" -}}
 apiVersion: apps/v1
 kind: Deployment

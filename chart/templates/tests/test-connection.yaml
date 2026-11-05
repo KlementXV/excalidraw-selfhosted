@@ -1,4 +1,4 @@
-# Checks the path of the browser: front, relay, store and database.
+# Checks the path of the browser: front, then relay and store when there is one.
 apiVersion: v1
 kind: Pod
 metadata:
@@ -24,7 +24,9 @@ spec:
         - -ec
         - |
           wget -q -O /dev/null "http://{{ include "excalidraw.fullname" . }}-front:8080/"
+          {{- if include "excalidraw.storageUrl" . }}
           wget -q -O /dev/null "http://{{ include "excalidraw.fullname" . }}-front:8080/api/v2/health"
+          {{- end }}
           echo OK
       resources:
         limits:

@@ -79,9 +79,27 @@ capabilities:
 {{- trimSuffix "/" .Values.publicUrl }}
 {{- end }}
 
-{{/* Full URL of the store. The front's nginx does not use the DNS search domains. */}}
+{{/* URL of the store, empty without one. The front's nginx does not use the DNS search domains. */}}
 {{- define "excalidraw.storageUrl" -}}
+{{- if .Values.storage.enabled }}
 {{- printf "http://%s-storage.%s.svc.%s:8080" (include "excalidraw.fullname" .) .Release.Namespace .Values.clusterDomain }}
+{{- else }}
+{{- trimSuffix "/" .Values.storage.externalUrl }}
+{{- end }}
+{{- end }}
+
+{{/* Database deployed for the store: cnpg, postgresql, external, or none without a store. */}}
+{{- define "excalidraw.database" -}}
+{{- if not .Values.storage.enabled }}none
+{{- else if .Values.cnpg.enabled }}cnpg
+{{- else if .Values.postgresql.enabled }}postgresql
+{{- else }}external
+{{- end }}
+{{- end }}
+
+{{/* CloudNativePG Cluster name. It also names its services and Secrets. */}}
+{{- define "excalidraw.cnpgName" -}}
+{{- printf "%s-cnpg" (include "excalidraw.fullname" .) | trunc 50 | trimSuffix "-" }}
 {{- end }}
 
 {{/* Image: global.imageRegistry, else image.registry. Call with (dict "ctx" $ "image" .Values.front.image "tag" "x"). */}}
