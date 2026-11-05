@@ -5,7 +5,7 @@ type: application
 # Chart version: bump on every chart change.
 version: 0.1.0
 # Tag of the front image when front.image.tag is empty.
-appVersion: "v0.18.1"
+appVersion: "v0.18.0"
 kubeVersion: ">=1.25.0-0"
 home: https://github.com/KlementXV/excalidraw-selfhosted
 sources:
