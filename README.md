@@ -10,8 +10,6 @@ This repository is a fork of `excalidraw/excalidraw-mcp`. It adds:
 
 The scene store is the unmodified [kitsteam/excalidraw-storage-backend](https://github.com/kitsteam/excalidraw-storage-backend) image.
 
-![Demo](docs/demo.gif)
-
 ## Architecture
 
 ```mermaid
@@ -143,8 +141,6 @@ pnpm run build
 pnpm run serve   # http://localhost:3001/mcp
 pnpm run dev:ui  # Widget only, with mock data
 ```
-
-Architecture details are in [CLAUDE.md](CLAUDE.md).
 
 ## Credits
 
