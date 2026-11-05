@@ -29,8 +29,6 @@ concurrency:
 jobs:
   build:
     runs-on: ubuntu-latest
-    env:
-      IMAGE: ghcr.io/${{ github.repository_owner }}/excalidraw-front
     steps:
       - uses: actions/checkout@v7
 
@@ -47,6 +45,9 @@ jobs:
           INPUT_REF: ${{ inputs.ref }}
           FORCE: ${{ inputs.force }}
         run: |
+          # Image names must be lowercase, GitHub owners do not have to be.
+          image="ghcr.io/$(printf '%s' "$GITHUB_REPOSITORY_OWNER" | tr '[:upper:]' '[:lower:]')/excalidraw-front"
+
           if [ -n "$INPUT_REF" ]; then
             ref="$INPUT_REF"
             is_latest=false
@@ -57,14 +58,15 @@ jobs:
           # A branch name such as feature/x is not a valid image tag.
           tag="$(printf '%s' "$ref" | tr -c 'A-Za-z0-9_.-' '-')"
 
-          if [ "$FORCE" != "true" ] && docker manifest inspect "$IMAGE:$tag" > /dev/null 2>&1; then
-            echo "$IMAGE:$tag already exists, nothing to build."
+          if [ "$FORCE" != "true" ] && docker manifest inspect "$image:$tag" > /dev/null 2>&1; then
+            echo "$image:$tag already exists, nothing to build."
             build=false
           else
             build=true
           fi
 
           {
+            echo "image=$image"
             echo "ref=$ref"
             echo "tag=$tag"
             echo "is_latest=$is_latest"
@@ -82,8 +84,8 @@ jobs:
           build-args: |
             EXCALIDRAW_REF=${{ steps.release.outputs.ref }}
           tags: |
-            ${{ env.IMAGE }}:${{ steps.release.outputs.tag }}
-            ${{ steps.release.outputs.is_latest == 'true' && format('{0}:latest', env.IMAGE) || '' }}
+            ${{ steps.release.outputs.image }}:${{ steps.release.outputs.tag }}
+            ${{ steps.release.outputs.is_latest == 'true' && format('{0}:latest', steps.release.outputs.image) || '' }}
           labels: |
             org.opencontainers.image.source=https://github.com/${{ github.repository }}
             org.opencontainers.image.version=${{ steps.release.outputs.ref }}
